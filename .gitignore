@@ -36,3 +36,4 @@ yarn-error.*
 *.tsbuildinfo
 
 app-example
+/novo_NOUI
