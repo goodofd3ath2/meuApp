@@ -16,14 +16,15 @@ const CadeirasScreen: React.FC = () => {
     fetch(API_URL)
       .then((res) => res.json())
       .then((data) => {
-        console.log("Dados recebidos:", data); // 🔍 Verifica os dados
-        setCadeiras(data); // ✅ Atualiza o estado corretamente
+        console.log("📥 Dados recebidos:", data); // Debugando os dados
+        setCadeiras(data);
       })
       .catch((err) => {
-        console.error("Erro ao buscar cadeiras:", err);
+        console.error("❌ Erro ao buscar cadeiras:", err);
         Alert.alert("Erro", "Erro ao buscar cadeiras");
       });
   }, []);
+  console.log("🎯 Estado atualizado:", cadeiras);
   
 
   // 🔹 Busca as descrições associadas à cadeira selecionada

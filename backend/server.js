@@ -1,8 +1,18 @@
 const express = require('express');
 const { Pool } = require('pg'); // Conectar ao PostgreSQL
+const cors = require('cors');
 
 const app = express();
 const port = 5000;
+
+// Configuração do CORS
+const corsOptions = {
+  origin: 'http://localhost:8082', // Permitir requisições de localhost:8082
+  methods: ['GET', 'POST'], // Permitir esses métodos HTTP
+  allowedHeaders: ['Content-Type'], // Permitir cabeçalhos como Content-Type
+};
+
+app.use(cors(corsOptions)); // Use a configuração do CORS
 
 app.use(express.json()); // Middleware para lidar com JSON no request body
 
@@ -13,8 +23,7 @@ const pool = new Pool({
   database: 'faculdade',
   password: 'root1',
   port: 5432,
-  client_encoding: 'utf8'  // 🔹 Força UTF-8 na conexão
-
+  client_encoding: 'utf8',  // 🔹 Força UTF-8 na conexão
 });
 
 // Rota para pegar as cadeiras
@@ -34,8 +43,6 @@ app.get('/api/cadeiras', async (req, res) => {
     res.status(500).json({ error: 'Erro ao buscar cadeiras' });
   }
 });
-
-
 
 // Rota para buscar descrições por cadeira
 app.get('/api/descricoes', async (req, res) => {
