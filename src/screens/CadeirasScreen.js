@@ -1,60 +1,76 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, ActivityIndicator, Button } from 'react-native';
-import axios from 'axios';
-import { useRouter } from 'expo-router';  // Importando useRouter para navegação
+import React, { useState, useEffect } from "react";
+import { View, Text, TextInput, TouchableOpacity, Picker, StyleSheet } from "react-native";
 
 const CadeirasScreen = () => {
-  const [cadeiras, setCadeiras] = useState([]);
-  const [loading, setLoading] = useState(true);  
-  const [error, setError] = useState(null);      
-  const router = useRouter();  // Usando o hook para navegação
+  const [cadeiras, setCadeiras] = useState([]); // Lista de cadeiras do banco
+  const [selectedCadeira, setSelectedCadeira] = useState(""); // Cadeira selecionada
+  const [descricao, setDescricao] = useState(""); // Descrição digitada
 
   useEffect(() => {
-    console.log('Iniciando requisição...');
-    axios.get('192.168.95.190:5000/cadeiras')
-      .then((response) => {
-        console.log('Dados recebidos:', response.data);
-        setCadeiras(response.data);
-        setLoading(false);
-      })
-      .catch((error) => {
-        console.error('Erro ao buscar as cadeiras:', error);
-        setError('Não foi possível carregar as cadeiras');
-        setLoading(false);
-      });
+    // Busca as cadeiras no backend
+    fetch("http://localhost:5000/api/cadeiras")
+      .then((res) => res.json())
+      .then((data) => setCadeiras(data))
+      .catch((err) => console.error("Erro ao buscar cadeiras:", err));
   }, []);
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#0000ff" />
-        <Text>Carregando...</Text>
-      </View>
-    );
-  }
+  const salvarCadeira = () => {
+    const novaCadeira = {
+      cadeira: selectedCadeira,
+      descricao: descricao,
+      dataHora: new Date().toISOString(),
+    };
 
-  if (error) {
-    return (
-      <View style={styles.center}>
-        <Text>{error}</Text>
-        <Button title="Voltar" onPress={() => router.back()} />
-      </View>
-    );
-  }
+    fetch("http://localhost:5000/api/cadeiras", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(novaCadeira),
+    })
+      .then((res) => res.json())
+      .then(() => {
+        alert("Cadeira salva com sucesso!");
+        setDescricao(""); // Limpa o campo de descrição
+      })
+      .catch((err) => console.error("Erro ao salvar cadeira:", err));
+  };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Cadeiras</Text>
-      <FlatList
-        data={cadeiras}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => (
-          <View style={styles.item}>
-            <Text>{item.nome}</Text>
-          </View>
-        )}
+      <Text style={styles.title}>Screen 2</Text>
+      <View style={styles.row}>
+        <Text style={styles.androidIcon}>🤖</Text>
+        <Picker
+          selectedValue={selectedCadeira}
+          style={styles.picker}
+          onValueChange={(itemValue) => setSelectedCadeira(itemValue)}
+        >
+          <Picker.Item label="Selecione uma opção" value="" />
+          {cadeiras.map((item) => (
+            <Picker.Item key={item.id} label={item.nome} value={item.nome} />
+          ))}
+        </Picker>
+      </View>
+
+      <TextInput
+        style={styles.input}
+        placeholder="Enter a value"
+        value={descricao}
+        onChangeText={setDescricao}
       />
-      <Button title="Voltar" onPress={() => router.back()} />  {/* Botão de Voltar */}
+
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity style={[styles.button, styles.pinkButton]} onPress={salvarCadeira}>
+          <Text style={styles.buttonText}>Button</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.button, styles.blueButton]}>
+          <Text style={styles.buttonText}>Button</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.button, styles.grayButton]}>
+          <Text style={styles.buttonText}>Button</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
@@ -62,23 +78,59 @@ const CadeirasScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#f2f2f2",
     padding: 20,
-    backgroundColor: '#fff',
   },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  header: {
+  title: {
     fontSize: 24,
-    fontWeight: 'bold',
+    color: "#aaa",
+    marginBottom: 10,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 20,
   },
-  item: {
+  androidIcon: {
+    fontSize: 30,
+    marginRight: 10,
+  },
+  picker: {
+    flex: 1,
+    height: 50,
+    backgroundColor: "#fff",
+    borderRadius: 5,
+  },
+  input: {
+    height: 100,
+    backgroundColor: "#fff",
+    borderRadius: 5,
     padding: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
+    textAlignVertical: "top",
+    marginBottom: 20,
+  },
+  buttonContainer: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+  },
+  button: {
+    padding: 10,
+    borderRadius: 5,
+    width: 100,
+    alignItems: "center",
+  },
+  pinkButton: {
+    backgroundColor: "#ff4081",
+  },
+  blueButton: {
+    backgroundColor: "#3f51b5",
+  },
+  grayButton: {
+    backgroundColor: "#d6d6d6",
+  },
+  buttonText: {
+    color: "#fff",
+    fontWeight: "bold",
   },
 });
 
