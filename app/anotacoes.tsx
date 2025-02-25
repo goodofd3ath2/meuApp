@@ -25,12 +25,13 @@ Notifications.setNotificationHandler({
   }),
 });
 
+// Tipo para cada anotação vinda do backend
 type Annotation = {
   id: number;
   cadeira: string;
   descricao: string;
-  dataHora: string; // armazenado em formato ISO no banco
-  tipo?: string; // opcional: "notificacao" ou "descricao"
+  dataHora: string; // armazenado no formato "YYYY-MM-DDTHH:MM:SS" (sem 'Z')
+  tipo?: string;    // opcional: "notificacao" ou "descricao"
 };
 
 const API_BASE = "http://192.168.95.190:5000";
@@ -43,7 +44,7 @@ export default function AnotacoesScreen() {
   const [selectedCadeira, setSelectedCadeira] = useState<string>('');
   const [cadeiras, setCadeiras] = useState<Array<{ id: number; nome: string }>>([]);
 
-  // Histórico do dia
+  // Histórico do dia (lista de anotações para a data selecionada)
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
 
   // Notificação e modal
@@ -72,7 +73,9 @@ export default function AnotacoesScreen() {
       if (response.ok) {
         const data = await response.json();
         setCadeiras(data);
-        if (data.length > 0 && !selectedCadeira) setSelectedCadeira(data[0].nome);
+        if (data.length > 0 && !selectedCadeira) {
+          setSelectedCadeira(data[0].nome);
+        }
       } else {
         console.error('Erro ao buscar cadeiras');
       }
@@ -128,6 +131,7 @@ export default function AnotacoesScreen() {
     }
   };
 
+  // Handler para o time picker
   const handleTimeSelection = (_event: any, selected?: Date) => {
     if (selected) {
       setSelectedTime(selected);
@@ -169,9 +173,14 @@ export default function AnotacoesScreen() {
         },
       });
     } else if (notificationType === 'once') {
-      const dateTimeObj = new Date(selectedDate); // ex.: new Date("2025-02-27")
-      dateTimeObj.setHours(selectedTime.getHours(), selectedTime.getMinutes(), 0, 0);
+      // Ignora fuso horário ao montar a data/hora
+      const [year, month, day] = selectedDate.split('-').map(Number);
+      const hours = selectedTime.getHours();
+      const minutes = selectedTime.getMinutes();
+
+      const dateTimeObj = new Date(year, month - 1, day, hours, minutes, 0);
       const seconds = Math.max(Math.ceil((dateTimeObj.getTime() - Date.now()) / 1000), 1);
+
       await Notifications.scheduleNotificationAsync({
         content: {
           title: 'Lembrete',
@@ -185,19 +194,20 @@ export default function AnotacoesScreen() {
     }
   };
 
-  // Função para salvar ou atualizar a anotação
+  // Salva nova anotação ou atualiza uma existente (sem usar offset)
   const saveAnnotation = async () => {
     // Verifica se um dia foi selecionado
     if (!selectedDate) {
       Alert.alert("Atenção", "Selecione um dia no calendário antes de salvar a anotação.");
       return;
     }
+    // Verifica se cadeira e texto estão preenchidos
     if (!selectedCadeira || !text) {
       Alert.alert("Atenção", "Selecione uma cadeira e digite uma descrição!");
       return;
     }
 
-    // Se o usuário definiu notificação, agenda-a
+    // Agenda notificação se definida
     if (notificationType) {
       try {
         await scheduleNotification();
@@ -205,20 +215,26 @@ export default function AnotacoesScreen() {
         console.error('Erro ao agendar notificação:', error);
       }
     }
-    // Cria um objeto Date usando selectedDate e selectedTime
-    const dateTimeObj = new Date(selectedDate); 
-    dateTimeObj.setHours(selectedTime.getHours(), selectedTime.getMinutes(), 0, 0);
-    const dateTimeISO = dateTimeObj.toISOString(); // Ex.: "2025-02-27T13:00:00.000Z"
 
-    // Inclui um campo "tipo" para diferenciar notificações de descrições comuns
+    // Ignora offset: cria string "YYYY-MM-DDTHH:MM:SS" manualmente
+    const [year, month, day] = selectedDate.split('-').map(Number);
+    const hours = selectedTime.getHours();
+    const minutes = selectedTime.getMinutes();
+
+    // Formata com zero à esquerda
+    const twoDigits = (num: number) => (num < 10 ? `0${num}` : `${num}`);
+    const dateTimeLocal = `${year}-${twoDigits(month)}-${twoDigits(day)}T${twoDigits(hours)}:${twoDigits(minutes)}:00`;
+    // Ex.: "2025-02-27T19:33:00"
+
     const payload = {
       cadeira: selectedCadeira,
       descricao: text,
-      dataHora: dateTimeISO,
+      dataHora: dateTimeLocal,
       tipo: notificationType ? "notificacao" : "descricao"
     };
 
     console.log("Payload:", payload);
+
     try {
       let response;
       if (editingAnnotation) {
@@ -235,6 +251,7 @@ export default function AnotacoesScreen() {
         });
       }
       console.log("Response status:", response.status);
+
       if (response.ok) {
         Alert.alert('Sucesso', editingAnnotation ? 'Anotação atualizada.' : 'Anotação salva com sucesso.');
         fetchAnnotations(selectedDate);
@@ -252,19 +269,30 @@ export default function AnotacoesScreen() {
     }
   };
 
-  // Carrega a anotação para edição ao tocar no item da lista
+  // Carrega a anotação para edição ao tocar no item
   const handleEditAnnotation = (annotation: Annotation) => {
     setEditingAnnotation(annotation);
     setText(annotation.descricao);
+
     if (!annotation.dataHora) {
       console.warn('Anotação sem dataHora, não é possível editar data/hora.');
       return;
     }
-    // Extrai somente a data da string ISO (YYYY-MM-DD)
+
+    // Se annotation.dataHora for "2025-02-27T19:33:00", extraímos "2025-02-27"
     const isoDate = annotation.dataHora.split('T')[0];
     setSelectedDate(isoDate);
-    // Ajusta o horário usando a data completa
-    setSelectedTime(new Date(annotation.dataHora));
+
+    // Ajusta selectedTime
+    // Extrai HH e MM da parte "19:33:00"
+    const timePart = annotation.dataHora.split('T')[1]; // ex.: "19:33:00"
+    const [hh, mm] = timePart.split(':').map(Number);
+
+    // Cria um objeto Date local (mês=0-based)
+    const [year, month, day] = isoDate.split('-').map(Number);
+    const dateObj = new Date(year, month - 1, day, hh, mm, 0);
+    setSelectedTime(dateObj);
+
     setSelectedCadeira(annotation.cadeira);
   };
 
@@ -289,6 +317,8 @@ export default function AnotacoesScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Anotações</Text>
+
+      {/* Calendário */}
       <Calendar
         minDate={new Date().toISOString().split('T')[0]}
         onDayPress={handleDayPress}
@@ -297,6 +327,8 @@ export default function AnotacoesScreen() {
         }}
         style={styles.calendar}
       />
+
+      {/* Campo para digitar a anotação */}
       <TextInput
         placeholder="Digite sua anotação..."
         value={text}
@@ -304,6 +336,7 @@ export default function AnotacoesScreen() {
         style={styles.input}
         multiline
       />
+
       <Text style={styles.label}>Selecione a cadeira:</Text>
       <View style={styles.picker}>
         <Picker
@@ -316,11 +349,15 @@ export default function AnotacoesScreen() {
           ))}
         </Picker>
       </View>
+
+      {/* Botões: Definir Notificação e Salvar */}
       <View style={styles.buttonRow}>
         <Button title="Definir Notificação" onPress={() => openNotifModal()} color="#007AFF" />
         <Button title={editingAnnotation ? "Atualizar" : "Salvar"} onPress={saveAnnotation} color="#007AFF" />
       </View>
+
       <Text style={styles.label}>Histórico do Dia</Text>
+      {/* Lista de anotações do dia */}
       <FlatList
         data={annotations}
         keyExtractor={(item) => String(item.id)}
@@ -365,6 +402,7 @@ export default function AnotacoesScreen() {
         </View>
       </Modal>
 
+      {/* Time Picker para iOS (e plataformas que não sejam Android ou web) */}
       {Platform.OS !== 'android' && Platform.OS !== 'web' && showTimePicker && (
         <DateTimePicker
           value={selectedTime}
@@ -427,4 +465,3 @@ const styles = StyleSheet.create({
   modalButtonText: { fontSize: 16, color: '#007AFF' },
 });
 
-export default AnotacoesScreen;
