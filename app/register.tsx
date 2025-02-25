@@ -1,61 +1,56 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 
-export default function HomeScreen() {
+export default function RegisterScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const handleLogin = async () => {
+  const handleRegister = async () => {
     try {
-      const response = await fetch('http://192.168.95.190:5000/login', {
+      console.log('📤 Tentando registrar...', { email, password }); // Verificando os dados antes do envio
+      const response = await fetch('http://192.168.95.190:5000/register', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
+
       const data = await response.json();
-      console.log('Resposta do servidor:', data);
-  
+      console.log('✅ Resposta do servidor:', data); // Verificando a resposta do servidor
+
       if (response.ok) {
-        Alert.alert('Sucesso', 'Login realizado com sucesso!');
-        router.push('/cadeiras'); // ou para a tela correta após login
+        Alert.alert('Sucesso', 'Conta criada com sucesso!');
+        router.push('/'); // Redireciona para a tela de login
       } else {
-        Alert.alert('Erro', data.message || 'Falha ao fazer login');
+        Alert.alert('Erro', data.message || 'Falha ao criar conta');
       }
     } catch (error) {
-      console.error('Erro ao tentar login:', error);
+      console.error('❌ Erro ao tentar registrar:', error);
       Alert.alert('Erro', 'Não foi possível conectar ao servidor');
     }
   };
-  
 
   return (
     <View style={styles.container}>
-      <Image source={{ uri: 'https://cdn-icons-png.flaticon.com/512/226/226770.png' }} style={styles.image} />
+      <Text style={styles.title}>Criar Conta</Text>
       
       <TextInput 
-        placeholder='Enter an email' 
+        placeholder='Digite seu email' 
         style={styles.input} 
         value={email} 
         onChangeText={setEmail} 
       />
       <TextInput 
-        placeholder='Enter a password' 
+        placeholder='Digite sua senha' 
         style={styles.input} 
         secureTextEntry 
         value={password} 
         onChangeText={setPassword} 
       />
       
-      <TouchableOpacity style={styles.buttonPink} onPress={handleLogin}>
-        <Text style={styles.buttonText}>Login</Text>
-      </TouchableOpacity>
-      
-      <TouchableOpacity onPress={() => router.push('/register')}>
-        <Text style={styles.link}>Click Me</Text>
+      <TouchableOpacity style={styles.button} onPress={handleRegister}>
+        <Text style={styles.buttonText}>Registrar</Text>
       </TouchableOpacity>
     </View>
   );
@@ -68,9 +63,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#fff',
   },
-  image: {
-    width: 100,
-    height: 100,
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
     marginBottom: 20,
   },
   input: {
@@ -82,8 +77,8 @@ const styles = StyleSheet.create({
     paddingLeft: 10,
     marginBottom: 10,
   },
-  buttonPink: {
-    backgroundColor: '#ff4081',
+  button: {
+    backgroundColor: '#007BFF',
     padding: 10,
     borderRadius: 5,
     marginTop: 10,
@@ -92,10 +87,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     textAlign: 'center',
     fontWeight: 'bold',
-  },
-  link: {
-    color: '#0000EE',
-    marginTop: 10,
-    textDecorationLine: 'underline',
   }
 });
