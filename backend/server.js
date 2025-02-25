@@ -90,23 +90,54 @@ app.get('/api/cadeiras', async (req, res) => {
   }
 });
 
-// Rota para buscar descrições (anotações)
-// Se for informado o parâmetro "cadeira", filtra por ele.
+// Rota para salvar descrições (POST)
+app.post('/api/descricoes', async (req, res) => {
+  const { cadeira, descricao, dataHora, tipo } = req.body;
+  if (!cadeira || !descricao || !dataHora) {
+    return res.status(400).json({ error: 'Campos obrigatórios não informados.' });
+  }
+
+  try {
+    // Supondo que a coluna data_hora seja TIMESTAMP WITHOUT TIME ZONE
+    const result = await pool.query(
+      `INSERT INTO descricoes (cadeira, descricao, data_hora, tipo)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [cadeira, descricao, dataHora, tipo]
+    );
+    return res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Erro ao salvar descrição:', error.message);
+    return res.status(500).json({ error: 'Erro ao salvar descrição' });
+  }
+});
+
+// Rota para buscar descrições (GET), filtrando por data
 app.get('/api/descricoes', async (req, res) => {
   const { data, cadeira } = req.query;
   
   if (data) {
     try {
-      const result = await pool.query('SELECT * FROM descricoes WHERE data_Hora::date = $1', [data]);
+      // Filtra registros cujo data_hora::date = data
+      const result = await pool.query(
+        `SELECT * FROM descricoes
+         WHERE data_hora::date = $1
+         ORDER BY data_hora ASC`,
+        [data]
+      );
       return res.json(result.rows);
     } catch (error) {
-      console.error('Erro ao buscar descrições por data:', error.message);
+      console.error('Erro ao buscar descrições:', error.message);
       return res.status(500).json({ error: 'Erro ao buscar descrições' });
     }
   } else if (cadeira) {
+    // Filtra por cadeira (caso queira)
     try {
-      const trimmedCadeira = cadeira.trim();
-      const result = await pool.query('SELECT * FROM descricoes WHERE cadeira ILIKE $1', [trimmedCadeira]);
+      const result = await pool.query(
+        `SELECT * FROM descricoes
+         WHERE cadeira ILIKE $1
+         ORDER BY data_hora ASC`,
+        [cadeira.trim()]
+      );
       return res.json(result.rows);
     } catch (error) {
       console.error('Erro ao buscar descrições por cadeira:', error.message);
@@ -117,39 +148,40 @@ app.get('/api/descricoes', async (req, res) => {
   }
 });
 
-
-// Endpoint para excluir uma anotação pelo ID
-app.delete('/api/descricoes/:id', async (req, res) => {
+// Rota para atualizar (PUT)
+app.put('/api/descricoes/:id', async (req, res) => {
   const { id } = req.params;
+  const { cadeira, descricao, dataHora, tipo } = req.body;
+  if (!cadeira || !descricao || !dataHora) {
+    return res.status(400).json({ error: 'Campos obrigatórios não informados.' });
+  }
   try {
-    await pool.query('DELETE FROM descricoes WHERE id = $1', [id]);
-    res.json({ message: 'Anotação excluída com sucesso.' });
+    const result = await pool.query(
+      `UPDATE descricoes
+       SET cadeira = $1, descricao = $2, data_hora = $3, tipo = $4
+       WHERE id = $5
+       RETURNING *`,
+      [cadeira, descricao, dataHora, tipo, id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Anotação não encontrada.' });
+    }
+    return res.json(result.rows[0]);
   } catch (error) {
-    console.error('Erro ao excluir anotação:', error.message);
-    res.status(500).json({ error: 'Erro ao excluir anotação.' });
+    console.error('Erro ao atualizar descrição:', error.message);
+    return res.status(500).json({ error: 'Erro ao atualizar descrição' });
   }
 });
 
-
-// Rota para salvar descrições
-app.post('/api/descricoes', async (req, res) => {
-  const { cadeira, descricao, dataHora } = req.body;
-
-  if (!cadeira || !descricao) {
-    return res.status(400).json({ error: 'Cadeira e descrição são obrigatórios.' });
-  }
-
+// Rota para excluir (DELETE)
+app.delete('/api/descricoes/:id', async (req, res) => {
+  const { id } = req.params;
   try {
-    // Inserindo a nova descrição no banco de dados
-    const result = await pool.query(
-      'INSERT INTO descricoes (cadeira, descricao, data_Hora) VALUES ($1, $2, $3) RETURNING *',
-      [cadeira, descricao, dataHora]
-    );
-    
-    res.status(201).json(result.rows[0]);  // Retornando a descrição inserida
+    const result = await pool.query('DELETE FROM descricoes WHERE id = $1', [id]);
+    return res.json({ message: 'Anotação excluída com sucesso.' });
   } catch (error) {
-    console.error('Erro ao salvar a descrição:', error.message);
-    res.status(500).json({ error: 'Erro ao salvar a descrição' });
+    console.error('Erro ao excluir anotação:', error.message);
+    return res.status(500).json({ error: 'Erro ao excluir anotação.' });
   }
 });
 
