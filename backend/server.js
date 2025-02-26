@@ -150,6 +150,11 @@ app.get('/api/descricoes', async (req, res) => {
 
 // Rota para atualizar (PUT)
 app.put('/api/descricoes/:id', async (req, res) => {
+  if (editingAnnotation) {
+    console.log("Editing anotação, ID:", editingAnnotation.id);
+    console.log(`${API_BASE}/api/descricoes/${editingAnnotation.id}`);
+  }
+  
   const { id } = req.params;
   const { cadeira, descricao, dataHora, tipo } = req.body;
   if (!cadeira || !descricao || !dataHora) {
@@ -172,6 +177,7 @@ app.put('/api/descricoes/:id', async (req, res) => {
     return res.status(500).json({ error: 'Erro ao atualizar descrição' });
   }
 });
+
 
 // Rota para excluir (DELETE)
 app.delete('/api/descricoes/:id', async (req, res) => {
