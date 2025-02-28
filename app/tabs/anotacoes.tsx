@@ -25,34 +25,33 @@ Notifications.setNotificationHandler({
   }),
 });
 
-// Tipo para cada anotação vinda do backend
+// Tipo de anotação
 type Annotation = {
   id: number;
   cadeira: string;
   descricao: string;
-  dataHora: string; // armazenado no formato "YYYY-MM-DDTHH:MM:SS" (sem 'Z')
-  tipo?: string;    // opcional: "notificacao" ou "descricao"
+  dataHora: string; // "YYYY-MM-DD HH:MM:SS"
+  tipo?: string;
 };
 
 const API_BASE = "http://192.168.95.190:5000";
 
+// Simulação: usuário logado com id e curso
+const usuarioLogado = { id: 1, curso: "Engenharia" };
+
 export default function AnotacoesScreen() {
-  // Dados da anotação
-  const [selectedDate, setSelectedDate] = useState<string>('');   // Ex.: "2025-02-27"
+  const [selectedDate, setSelectedDate] = useState<string>(''); // ex.: "2025-02-27"
   const [text, setText] = useState<string>('');
   const [selectedTime, setSelectedTime] = useState<Date>(new Date());
   const [selectedCadeira, setSelectedCadeira] = useState<string>('');
   const [cadeiras, setCadeiras] = useState<Array<{ id: number; nome: string }>>([]);
 
-  // Histórico do dia (lista de anotações para a data selecionada)
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
 
-  // Notificação e modal
   const [notificationType, setNotificationType] = useState<'daily' | 'once' | null>(null);
   const [showTimePicker, setShowTimePicker] = useState<boolean>(false);
   const [notifModalVisible, setNotifModalVisible] = useState<boolean>(false);
 
-  // Controle de edição
   const [editingAnnotation, setEditingAnnotation] = useState<Annotation | null>(null);
 
   useEffect(() => {
@@ -66,10 +65,10 @@ export default function AnotacoesScreen() {
     fetchCadeiras();
   }, []);
 
-  // Busca cadeiras para o Picker
+  // Busca cadeiras do curso do usuário
   const fetchCadeiras = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/cadeiras`);
+      const response = await fetch(`${API_BASE}/api/cadeiras?curso=${usuarioLogado.curso}`);
       if (response.ok) {
         const data = await response.json();
         setCadeiras(data);
@@ -84,13 +83,17 @@ export default function AnotacoesScreen() {
     }
   };
 
-  // Busca as anotações do dia via parâmetro "data"
+  // Busca anotações filtradas por data, tipo "anotacao" e user_id
   const fetchAnnotations = async (date: string) => {
     try {
-      const response = await fetch(`${API_BASE}/api/descricoes?data=${date}`);
+      const response = await fetch(`${API_BASE}/api/descricoes?data=${date}&tipo=anotacao&user_id=${usuarioLogado.id}`);
       if (response.ok) {
         const data = await response.json();
-        setAnnotations(data);
+        const mappedData = data.map((item: any) => ({
+          ...item,
+          dataHora: item.data_hora,
+        }));
+        setAnnotations(mappedData);
       } else {
         setAnnotations([]);
       }
@@ -99,18 +102,16 @@ export default function AnotacoesScreen() {
     }
   };
 
-  // Ao clicar em um dia no calendário, define a data e busca o histórico
   const handleDayPress = (day: DateData) => {
-    setSelectedDate(day.dateString);  // Ex.: "2025-02-27"
+    setSelectedDate(day.dateString);
     fetchAnnotations(day.dateString);
   };
 
-  // Abre o modal para definir notificação
+  // Notificações
   const openNotifModal = () => {
     setNotifModalVisible(true);
   };
 
-  // Seleção do tipo de notificação
   const handleNotificationSelection = (type: 'daily' | 'once') => {
     setNotificationType(type);
     if (type === 'once') {
@@ -131,7 +132,6 @@ export default function AnotacoesScreen() {
     }
   };
 
-  // Handler para o time picker
   const handleTimeSelection = (_event: any, selected?: Date) => {
     if (selected) {
       setSelectedTime(selected);
@@ -140,7 +140,6 @@ export default function AnotacoesScreen() {
     setNotifModalVisible(false);
   };
 
-  // Calcula os segundos até o próximo horário alvo
   const getSecondsUntilNextTrigger = (targetHour: number, targetMinute: number): number => {
     const now = new Date();
     const target = new Date(now);
@@ -151,7 +150,6 @@ export default function AnotacoesScreen() {
     return Math.ceil((target.getTime() - now.getTime()) / 1000);
   };
 
-  // Agenda a notificação conforme o tipo escolhido
   const scheduleNotification = async () => {
     if (Platform.OS === 'web') {
       console.warn('Notificações não são suportadas na web.');
@@ -168,25 +166,26 @@ export default function AnotacoesScreen() {
           body: text || 'Você tem uma anotação!',
         },
         trigger: {
+          type: 'timeInterval',
           seconds: secondsUntilTrigger,
           repeats: true,
         },
       });
     } else if (notificationType === 'once') {
-      // Ignora fuso horário ao montar a data/hora
       const [year, month, day] = selectedDate.split('-').map(Number);
       const hours = selectedTime.getHours();
       const minutes = selectedTime.getMinutes();
-
-      const dateTimeObj = new Date(year, month - 1, day, hours, minutes, 0);
+      const twoDigits = (num: number) => (num < 10 ? `0${num}` : `${num}`);
+      const dateTimeLocal = `${year}-${twoDigits(month)}-${twoDigits(day)} ${twoDigits(hours)}:${twoDigits(minutes)}:00`;
+      const dateTimeObj = new Date(dateTimeLocal);
       const seconds = Math.max(Math.ceil((dateTimeObj.getTime() - Date.now()) / 1000), 1);
-
       await Notifications.scheduleNotificationAsync({
         content: {
           title: 'Lembrete',
           body: text || 'Você tem uma anotação!',
         },
         trigger: {
+          type: 'timeInterval',
           seconds,
           repeats: false,
         },
@@ -194,20 +193,15 @@ export default function AnotacoesScreen() {
     }
   };
 
-  // Salva nova anotação ou atualiza uma existente (sem usar offset)
   const saveAnnotation = async () => {
-    // Verifica se um dia foi selecionado
     if (!selectedDate) {
       Alert.alert("Atenção", "Selecione um dia no calendário antes de salvar a anotação.");
       return;
     }
-    // Verifica se cadeira e texto estão preenchidos
     if (!selectedCadeira || !text) {
       Alert.alert("Atenção", "Selecione uma cadeira e digite uma descrição!");
       return;
     }
-
-    // Agenda notificação se definida
     if (notificationType) {
       try {
         await scheduleNotification();
@@ -215,22 +209,18 @@ export default function AnotacoesScreen() {
         console.error('Erro ao agendar notificação:', error);
       }
     }
-
-    // Ignora offset: cria string "YYYY-MM-DDTHH:MM:SS" manualmente
     const [year, month, day] = selectedDate.split('-').map(Number);
     const hours = selectedTime.getHours();
     const minutes = selectedTime.getMinutes();
-
-    // Formata com zero à esquerda
     const twoDigits = (num: number) => (num < 10 ? `0${num}` : `${num}`);
-    const dateTimeLocal = `${year}-${twoDigits(month)}-${twoDigits(day)}T${twoDigits(hours)}:${twoDigits(minutes)}:00`;
-    // Ex.: "2025-02-27T19:33:00"
-
+    const dateTimeLocal = `${year}-${twoDigits(month)}-${twoDigits(day)} ${twoDigits(hours)}:${twoDigits(minutes)}:00`;
+    
     const payload = {
       cadeira: selectedCadeira,
       descricao: text,
       dataHora: dateTimeLocal,
-      tipo: notificationType ? "notificacao" : "descricao"
+      tipo: "anotacao", // Força tipo "anotacao"
+      user_id: usuarioLogado.id
     };
 
     console.log("Payload:", payload);
@@ -250,12 +240,9 @@ export default function AnotacoesScreen() {
           body: JSON.stringify(payload)
         });
       }
-      console.log("Response status:", response.status);
-
       if (response.ok) {
         Alert.alert('Sucesso', editingAnnotation ? 'Anotação atualizada.' : 'Anotação salva com sucesso.');
         fetchAnnotations(selectedDate);
-        // Limpa o formulário
         setText('');
         setNotificationType(null);
         setEditingAnnotation(null);
@@ -269,34 +256,22 @@ export default function AnotacoesScreen() {
     }
   };
 
-  // Carrega a anotação para edição ao tocar no item
   const handleEditAnnotation = (annotation: Annotation) => {
     setEditingAnnotation(annotation);
     setText(annotation.descricao);
-
     if (!annotation.dataHora) {
-      console.warn('Anotação sem dataHora, não é possível editar data/hora.');
+      Alert.alert('Aviso', 'Anotação sem data/hora não pode ser editada.');
       return;
     }
-
-    // Se annotation.dataHora for "2025-02-27T19:33:00", extraímos "2025-02-27"
-    const isoDate = annotation.dataHora.split('T')[0];
-    setSelectedDate(isoDate);
-
-    // Ajusta selectedTime
-    // Extrai HH e MM da parte "19:33:00"
-    const timePart = annotation.dataHora.split('T')[1]; // ex.: "19:33:00"
-    const [hh, mm] = timePart.split(':').map(Number);
-
-    // Cria um objeto Date local (mês=0-based)
-    const [year, month, day] = isoDate.split('-').map(Number);
-    const dateObj = new Date(year, month - 1, day, hh, mm, 0);
-    setSelectedTime(dateObj);
-
+    const parts = annotation.dataHora.split(' ');
+    if (parts.length < 2) return;
+    const [datePart, timePart] = parts;
+    setSelectedDate(datePart);
+    const isoString = datePart + "T" + timePart;
+    setSelectedTime(new Date(isoString));
     setSelectedCadeira(annotation.cadeira);
   };
 
-  // Exclui uma anotação via DELETE
   const deleteAnnotation = async (id: number) => {
     try {
       const response = await fetch(`${API_BASE}/api/descricoes/${id}`, {
@@ -317,8 +292,6 @@ export default function AnotacoesScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Anotações</Text>
-
-      {/* Calendário */}
       <Calendar
         minDate={new Date().toISOString().split('T')[0]}
         onDayPress={handleDayPress}
@@ -327,8 +300,6 @@ export default function AnotacoesScreen() {
         }}
         style={styles.calendar}
       />
-
-      {/* Campo para digitar a anotação */}
       <TextInput
         placeholder="Digite sua anotação..."
         value={text}
@@ -336,7 +307,6 @@ export default function AnotacoesScreen() {
         style={styles.input}
         multiline
       />
-
       <Text style={styles.label}>Selecione a cadeira:</Text>
       <View style={styles.picker}>
         <Picker
@@ -349,15 +319,11 @@ export default function AnotacoesScreen() {
           ))}
         </Picker>
       </View>
-
-      {/* Botões: Definir Notificação e Salvar */}
       <View style={styles.buttonRow}>
-        <Button title="Definir Notificação" onPress={() => openNotifModal()} color="#007AFF" />
+        <Button title="Definir Notificação" onPress={openNotifModal} color="#007AFF" />
         <Button title={editingAnnotation ? "Atualizar" : "Salvar"} onPress={saveAnnotation} color="#007AFF" />
       </View>
-
       <Text style={styles.label}>Histórico do Dia</Text>
-      {/* Lista de anotações do dia */}
       <FlatList
         data={annotations}
         keyExtractor={(item) => String(item.id)}
@@ -365,9 +331,7 @@ export default function AnotacoesScreen() {
           <TouchableOpacity style={styles.item} onPress={() => handleEditAnnotation(item)}>
             <View style={styles.itemContent}>
               <Text style={styles.itemTitle}>{item.descricao}</Text>
-              <Text style={styles.itemInfo}>
-                {item.dataHora} {item.tipo === "notificacao" ? "(Notificação)" : ""}
-              </Text>
+              <Text style={styles.itemInfo}>{item.dataHora} {item.tipo === "notificacao" ? "(Notificação)" : ""}</Text>
               <Text style={styles.itemInfo}>Cadeira: {item.cadeira}</Text>
             </View>
             <TouchableOpacity onPress={() => deleteAnnotation(item.id)} style={styles.deleteButton}>
@@ -376,8 +340,6 @@ export default function AnotacoesScreen() {
           </TouchableOpacity>
         )}
       />
-
-      {/* Modal para escolha do tipo de notificação */}
       <Modal visible={notifModalVisible} transparent animationType="slide">
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
@@ -401,8 +363,6 @@ export default function AnotacoesScreen() {
           </View>
         </View>
       </Modal>
-
-      {/* Time Picker para iOS (e plataformas que não sejam Android ou web) */}
       {Platform.OS !== 'android' && Platform.OS !== 'web' && showTimePicker && (
         <DateTimePicker
           value={selectedTime}
@@ -416,52 +376,55 @@ export default function AnotacoesScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f7f7f7', padding: 20, paddingTop: 40 },
-  title: { fontSize: 24, color: '#333', marginBottom: 20, fontWeight: '600', textAlign: 'center' },
+  container: { flex: 1, backgroundColor: "#f7f7f7", padding: 20, paddingTop: 40 },
+  title: { fontSize: 24, color: "#333", marginBottom: 20, fontWeight: "600", textAlign: "center" },
   calendar: { marginBottom: 20 },
   input: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderRadius: 10,
     padding: 15,
-    textAlignVertical: 'top',
+    textAlignVertical: "top",
     marginBottom: 15,
     height: 120,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
-  label: { fontSize: 16, fontWeight: '500', color: '#555', marginBottom: 10 },
+  label: { fontSize: 16, fontWeight: "500", color: "#555", marginBottom: 10 },
   picker: {
     height: 50,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderRadius: 8,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: Platform.OS === 'ios' ? '#007AFF' : '#000',
-    justifyContent: 'center',
+    borderColor: Platform.OS === "ios" ? "#007AFF" : "#000",
+    justifyContent: "center",
+    paddingLeft: 10,
+    padding: 10,
   },
   pickerInner: { height: 50 },
-  buttonRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
+  buttonRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 15 },
   item: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
+    flexDirection: "row",
+    backgroundColor: "#fff",
     borderRadius: 10,
     marginVertical: 5,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: "#ddd",
     padding: 10,
-    alignItems: 'center',
+    alignItems: "center",
   },
   itemContent: { flex: 1 },
-  itemTitle: { fontWeight: '600', fontSize: 16, color: '#333', marginBottom: 5 },
-  itemInfo: { fontSize: 14, color: '#666' },
-  deleteButton: { padding: 5, backgroundColor: '#FF3B30', borderRadius: 5 },
-  deleteButtonText: { color: '#fff', fontSize: 12 },
-  modalContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' },
-  modalContent: { width: '80%', backgroundColor: '#fff', padding: 20, borderRadius: 10, alignItems: 'center' },
-  modalTitle: { fontSize: 18, fontWeight: '600', marginBottom: 10, textAlign: 'center' },
+  itemTitle: { fontWeight: "600", fontSize: 16, color: "#333", marginBottom: 5 },
+  itemInfo: { fontSize: 14, color: "#666" },
+  deleteButton: { padding: 5, backgroundColor: "#FF3B30", borderRadius: 5 },
+  deleteButtonText: { color: "#fff", fontSize: 12 },
+  modalContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)" },
+  modalContent: { width: "80%", backgroundColor: "#fff", padding: 20, borderRadius: 10, alignItems: "center" },
+  modalTitle: { fontSize: 18, fontWeight: "600", marginBottom: 10, textAlign: "center" },
   modalButton: { marginVertical: 5 },
-  modalButtonText: { fontSize: 16, color: '#007AFF' },
+  modalButtonText: { fontSize: 16, color: "#007AFF" },
 });
 
+export default AnotacoesScreen;

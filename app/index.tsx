@@ -21,7 +21,7 @@ export default function HomeScreen() {
   
       if (response.ok) {
         Alert.alert('Sucesso', 'Login realizado com sucesso!');
-        router.push('/cadeiras'); // ou para a tela correta após login
+        router.push('/tabs/cadeiras'); // ou para a tela correta após login
       } else {
         Alert.alert('Erro', data.message || 'Falha ao fazer login');
       }
