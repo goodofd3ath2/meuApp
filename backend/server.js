@@ -18,40 +18,44 @@ const pool = new Pool({
   client_encoding: 'utf8',
 });
 
-// ------------------- ROTAS DE USUÁRIO -------------------
-// Registro: recebe email, password e curso.
-app.post('/register', async (req, res) => {
-    const { email, password, curso } = req.body;
-    if (!email || !password || !curso) {
-      return res.status(400).json({ message: 'Preencha email, senha e curso.' });
-    }
-  
-    // Expressão regular para validar o formato do email:
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@sou\.urcamp\.edu\.br$/;
-    if (!emailRegex.test(email.toLowerCase())) {
-      return res.status(400).json({ message: 'O email deve ter o formato nomedapessoanrmatricula@sou.urcamp.edu.br' });
-    }
-  
-    try {
-      const result = await pool.query('SELECT * FROM usuarios WHERE email = $1', [email]);
-      if (result.rows.length > 0) {
-        return res.status(400).json({ message: 'Usuário já cadastrado' });
-      }
-      const hashedPassword = await bcrypt.hash(password, 10);
-      const insertResult = await pool.query(
-        'INSERT INTO usuarios (email, password, curso) VALUES ($1, $2, $3) RETURNING *',
-        [email, hashedPassword, curso]
-      );
-      console.log("Recebido email:", `'${req.body.email}'`);
-      res.status(201).json(insertResult.rows[0]);
-    } catch (error) {
-      console.error('Erro ao registrar usuário:', error.message);
-      res.status(500).json({ error: 'Erro ao registrar usuário' });
-    }
-  });
-  
+/* 
+  Estrutura:
+  - Tabela curso: (id, nome)
+  - Tabela usuarios: (id, email, password, curso_id)
+  - Tabela cadeiras: (id, nome, curso_id)
+  - Tabela descricoes: (id, cadeira, descricao, data_hora, tipo, user_id)
+*/
 
-// Login: retorna os dados do usuário (incluindo id e curso)
+/* ROTAS DE USUÁRIO */
+// Registro: recebe email, password e curso_id (número)
+app.post('/register', async (req, res) => {
+  const { email, password, curso_id } = req.body;
+  if (!email || !password || !curso_id) {
+    return res.status(400).json({ message: 'Preencha email, senha e curso.' });
+  }
+  // Validação de domínio de e-mail: somente @sou.urcamp.edu.br
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@sou\.urcamp\.edu\.br$/;
+  if (!emailRegex.test(email.toLowerCase())) {
+    return res.status(400).json({ message: 'O email deve ser do domínio @sou.urcamp.edu.br' });
+  }
+  try {
+    const result = await pool.query('SELECT * FROM usuarios WHERE email = $1', [email]);
+    if (result.rows.length > 0) {
+      return res.status(400).json({ message: 'Usuário já cadastrado' });
+    }
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const insertResult = await pool.query(
+      'INSERT INTO usuarios (email, password, curso_id) VALUES ($1, $2, $3) RETURNING *',
+      [email, hashedPassword, curso_id]
+    );
+    res.status(201).json(insertResult.rows[0]);
+  } catch (error) {
+    console.error('Erro ao registrar usuário:', error.message);
+    res.status(500).json({ error: 'Erro ao registrar usuário' });
+  }
+});
+
+// Login: retorna os dados do usuário (incluindo id e curso_id)
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -72,15 +76,15 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// ------------------- ROTAS DE CADEIRAS -------------------
-// Se enviar ?curso=..., retorna apenas as cadeiras do curso
+/* ROTAS DE CADEIRAS */
+// Retorna as cadeiras filtradas pelo curso_id
 app.get('/api/cadeiras', async (req, res) => {
-  const { curso } = req.query;
+  const { curso_id } = req.query;
   let query = 'SELECT id, nome FROM cadeiras';
   let values = [];
-  if (curso) {
-    query += ' WHERE curso ILIKE $1';
-    values.push(curso.trim());
+  if (curso_id) {
+    query += ' WHERE curso_id = $1';
+    values.push(curso_id);
   }
   try {
     const result = await pool.query(query, values);
@@ -91,7 +95,7 @@ app.get('/api/cadeiras', async (req, res) => {
   }
 });
 
-// ------------------- ROTAS DE DESCRICOES (ANOTAÇÕES) -------------------
+/* ROTAS DE DESCRICOES (ANOTAÇÕES) */
 // Suporte a filtros: data, cadeira, tipo e user_id
 app.get('/api/descricoes', async (req, res) => {
   const { data, cadeira, tipo, user_id } = req.query;
@@ -137,7 +141,7 @@ app.get('/api/descricoes', async (req, res) => {
   }
 });
 
-// Rota para salvar descricoes (POST)
+// Salvar uma descrição (POST)
 app.post('/api/descricoes', async (req, res) => {
   const { cadeira, descricao, dataHora, tipo, user_id } = req.body;
   if (!cadeira || !descricao || !dataHora || !user_id) {
@@ -158,7 +162,7 @@ app.post('/api/descricoes', async (req, res) => {
   }
 });
 
-// Rota para atualizar descricoes (PUT)
+// Atualizar uma descrição (PUT)
 app.put('/api/descricoes/:id', async (req, res) => {
   const { id } = req.params;
   const { cadeira, descricao, dataHora, tipo, user_id } = req.body;
@@ -184,7 +188,7 @@ app.put('/api/descricoes/:id', async (req, res) => {
   }
 });
 
-// Rota para excluir uma anotação pelo ID
+// Excluir uma descrição (DELETE)
 app.delete('/api/descricoes/:id', async (req, res) => {
   const { id } = req.params;
   try {
@@ -199,17 +203,17 @@ app.delete('/api/descricoes/:id', async (req, res) => {
   }
 });
 
+// Rota para buscar todos os cursos
+app.get('/api/cursos', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT id, nome FROM curso ORDER BY nome ASC');
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Erro ao buscar cursos:', error.message);
+    res.status(500).json({ error: 'Erro ao buscar cursos' });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Servidor rodando em http://localhost:${port}`);
 });
-// Rota para buscar todos os cursos
-app.get('/api/cursos', async (req, res) => {
-    try {
-      const result = await pool.query('SELECT id, nome FROM curso ORDER BY nome ASC');
-      res.json(result.rows);
-    } catch (error) {
-      console.error('Erro ao buscar cursos:', error.message);
-      res.status(500).json({ error: 'Erro ao buscar cursos' });
-    }
-  });
-  

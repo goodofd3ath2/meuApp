@@ -2,22 +2,27 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Picker } from '@react-native-picker/picker';
+import { ICurso } from './types';
+
+const API_BASE = "http://192.168.95.190:5000";
 
 export default function RegisterScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [curso, setCurso] = useState('');
-  const [cursos, setCursos] = useState<Array<{ id: number; nome: string }>>([]);
+  const [curso, setCurso] = useState(''); // Curso será armazenado como string (id)
+  const [cursos, setCursos] = useState<ICurso[]>([]);
 
   useEffect(() => {
     async function fetchCursos() {
       try {
-        const response = await fetch('http://192.168.95.190:5000/api/cursos');
+        const response = await fetch(`${API_BASE}/api/cursos`);
         if (response.ok) {
-          const data = await response.json();
+          const data: ICurso[] = await response.json();
           setCursos(data);
-          if (data.length > 0) setCurso(data[0].nome);
+          if (data.length > 0) {
+            setCurso(data[0].id.toString());
+          }
         } else {
           console.error('Erro ao buscar cursos');
         }
@@ -34,15 +39,15 @@ export default function RegisterScreen() {
       return;
     }
     try {
-      const response = await fetch('http://192.168.95.190:5000/register', {
+      const response = await fetch(`${API_BASE}/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, curso })
+        body: JSON.stringify({ email, password, curso_id: parseInt(curso) })
       });
       const data = await response.json();
       if (response.ok) {
         Alert.alert('Sucesso', 'Conta criada com sucesso!');
-        router.push('/'); // redireciona para a tela de login
+        router.push('/'); // Redireciona para a tela de login
       } else {
         Alert.alert('Erro', data.message || 'Falha ao criar conta');
       }
@@ -75,7 +80,7 @@ export default function RegisterScreen() {
         style={styles.picker}
       >
         {cursos.map((item) => (
-          <Picker.Item key={item.id} label={item.nome} value={item.nome} />
+          <Picker.Item key={item.id} label={item.nome} value={item.id.toString()} />
         ))}
       </Picker>
       <TouchableOpacity style={styles.button} onPress={handleRegister}>
@@ -127,3 +132,4 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   }
 });
+
