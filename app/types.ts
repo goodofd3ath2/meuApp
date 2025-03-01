@@ -23,8 +23,8 @@ export interface IUser {
     id?: number;
     cadeira: string;
     descricao: string;
-    dataHora: string;  // Em camelCase
+    dataHora: string; // Formato "YYYY-MM-DD HH:MM:SS"
     tipo?: string;
-    user_id?: number;
+    user_id: number;
   }
   

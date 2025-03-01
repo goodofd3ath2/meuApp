@@ -1,3 +1,4 @@
+// anotacoes.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -16,8 +17,6 @@ import * as Notifications from 'expo-notifications';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
-
-// Importa os tipos definidos em types.ts
 import { IAnotacao, ICadeira } from '../types';
 
 Notifications.setNotificationHandler({
@@ -30,11 +29,11 @@ Notifications.setNotificationHandler({
 
 const API_BASE = "http://192.168.95.190:5000";
 
-// Simulação: usuário logado com id e curso_id
+// Simulação: usuário logado com id e curso_id (por exemplo, Direito = 3)
 const usuarioLogado = { id: 1, curso_id: 3 };
 
 export default function AnotacoesScreen() {
-  const [selectedDate, setSelectedDate] = useState<string>(''); 
+  const [selectedDate, setSelectedDate] = useState<string>('');
   const [text, setText] = useState<string>('');
   const [selectedTime, setSelectedTime] = useState<Date>(new Date());
   const [selectedCadeira, setSelectedCadeira] = useState<string>('');
@@ -56,7 +55,7 @@ export default function AnotacoesScreen() {
     fetchCadeiras();
   }, []);
 
-  // Busca cadeiras do curso do usuário
+  // Busca cadeiras do curso do usuário (usando o curso_id do usuário)
   const fetchCadeiras = async () => {
     try {
       const response = await fetch(`${API_BASE}/api/cadeiras?curso_id=${usuarioLogado.curso_id}`);
@@ -74,16 +73,15 @@ export default function AnotacoesScreen() {
     }
   };
 
-  // Busca anotações do tipo "anotacao" para o usuário em uma data específica
+  // Busca anotações (tipo "anotacao") para o usuário em uma data específica
   const fetchAnnotations = async (date: string) => {
     try {
       const response = await fetch(`${API_BASE}/api/descricoes?data=${date}&tipo=anotacao&user_id=${usuarioLogado.id}`);
       if (response.ok) {
         const data = await response.json();
-        // Mapeia a propriedade data_hora para dataHora
         const mappedData: IAnotacao[] = data.map((item: any) => ({
           ...item,
-          dataHora: item.data_hora,
+          dataHora: item.data_hora, // converte a propriedade do backend
         }));
         setAnnotations(mappedData);
       } else {
@@ -158,7 +156,6 @@ export default function AnotacoesScreen() {
           body: text || 'Você tem uma anotação!',
         },
         trigger: {
-          type: 'timeInterval',
           seconds: secondsUntilTrigger,
           repeats: true,
         },
@@ -177,7 +174,6 @@ export default function AnotacoesScreen() {
           body: text || 'Você tem uma anotação!',
         },
         trigger: {
-          type: 'timeInterval',
           seconds,
           repeats: false,
         },

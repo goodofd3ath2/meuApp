@@ -1,3 +1,4 @@
+// server.js
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
@@ -33,7 +34,7 @@ app.post('/register', async (req, res) => {
   if (!email || !password || !curso_id) {
     return res.status(400).json({ message: 'Preencha email, senha e curso.' });
   }
-  // Validação de domínio de e-mail: somente @sou.urcamp.edu.br
+  // Validação do domínio: somente emails @sou.urcamp.edu.br
   const emailRegex = /^[a-zA-Z0-9._%+-]+@sou\.urcamp\.edu\.br$/;
   if (!emailRegex.test(email.toLowerCase())) {
     return res.status(400).json({ message: 'O email deve ser do domínio @sou.urcamp.edu.br' });
@@ -55,7 +56,7 @@ app.post('/register', async (req, res) => {
   }
 });
 
-// Login: retorna os dados do usuário (incluindo id e curso_id)
+// Login: retorna os dados do usuário
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -77,10 +78,10 @@ app.post('/login', async (req, res) => {
 });
 
 /* ROTAS DE CADEIRAS */
-// Retorna as cadeiras filtradas pelo curso_id
+// Retorna cadeiras filtradas por curso_id (passado como query param)
 app.get('/api/cadeiras', async (req, res) => {
   const { curso_id } = req.query;
-  let query = 'SELECT id, nome FROM cadeiras';
+  let query = 'SELECT id, nome, curso_id FROM cadeiras';
   let values = [];
   if (curso_id) {
     query += ' WHERE curso_id = $1';
@@ -96,7 +97,7 @@ app.get('/api/cadeiras', async (req, res) => {
 });
 
 /* ROTAS DE DESCRICOES (ANOTAÇÕES) */
-// Suporte a filtros: data, cadeira, tipo e user_id
+// Permite filtros por data, cadeira, tipo e user_id
 app.get('/api/descricoes', async (req, res) => {
   const { data, cadeira, tipo, user_id } = req.query;
   
@@ -141,7 +142,7 @@ app.get('/api/descricoes', async (req, res) => {
   }
 });
 
-// Salvar uma descrição (POST)
+// Salvar uma descrição
 app.post('/api/descricoes', async (req, res) => {
   const { cadeira, descricao, dataHora, tipo, user_id } = req.body;
   if (!cadeira || !descricao || !dataHora || !user_id) {
@@ -162,7 +163,7 @@ app.post('/api/descricoes', async (req, res) => {
   }
 });
 
-// Atualizar uma descrição (PUT)
+// Atualizar uma descrição
 app.put('/api/descricoes/:id', async (req, res) => {
   const { id } = req.params;
   const { cadeira, descricao, dataHora, tipo, user_id } = req.body;
@@ -188,7 +189,7 @@ app.put('/api/descricoes/:id', async (req, res) => {
   }
 });
 
-// Excluir uma descrição (DELETE)
+// Excluir uma descrição
 app.delete('/api/descricoes/:id', async (req, res) => {
   const { id } = req.params;
   try {
