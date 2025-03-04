@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Picker } from '@react-native-picker/picker';
-import { ICurso } from './types';
+import { ICurso } from './_types/types';
 
 const API_BASE = "http://192.168.95.190:5000";
 

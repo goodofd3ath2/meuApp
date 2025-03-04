@@ -97,7 +97,6 @@ app.get('/api/cadeiras', async (req, res) => {
 });
 
 /* ROTAS DE DESCRICOES (ANOTAÇÕES) */
-// Permite filtros por data, cadeira, tipo e user_id
 app.get('/api/descricoes', async (req, res) => {
   const { data, cadeira, tipo, user_id } = req.query;
   
@@ -107,6 +106,7 @@ app.get('/api/descricoes', async (req, res) => {
   let index = 1;
   
   if (data) {
+    // Filtra pela data, assumindo que data_hora é do tipo TIMESTAMP ou DATE no banco
     conditions.push(`data_hora::date = $${index}`);
     values.push(data);
     index++;
@@ -141,6 +141,8 @@ app.get('/api/descricoes', async (req, res) => {
     return res.status(500).json({ error: 'Erro ao buscar descrições' });
   }
 });
+
+
 
 // Salvar uma descrição
 app.post('/api/descricoes', async (req, res) => {
