@@ -1,11 +1,12 @@
+// App.tsx ou app/_layout.tsx (dependendo da sua estrutura)
 import React from 'react';
-import Navigation from './Navigation';  // Certifique-se de que o caminho está correto (dependendo da pasta)
-import { SafeAreaView } from 'react-native';
+import { AuthProvider } from '../src/AuthContext'; // ajuste o caminho conforme sua estrutura
+import { Slot } from 'expo-router';
 
 export default function App() {
   return (
-    <SafeAreaView style={{ flex: 1 }}>
-      <Navigation />
-    </SafeAreaView>
+    <AuthProvider>
+      <Slot />
+    </AuthProvider>
   );
 }

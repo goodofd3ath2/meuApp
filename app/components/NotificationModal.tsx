@@ -1,4 +1,3 @@
-// components/NotificationModal.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -23,11 +22,8 @@ interface NotificationModalProps {
 
 export const NotificationModal: React.FC<NotificationModalProps> = ({ visible, onClose }) => {
   const [scheduleType, setScheduleType] = useState<ScheduleType>('exact');
-  // Para data exata
   const [exactDate, setExactDate] = useState<Date>(new Date(Date.now() + 60 * 1000));
-  // Para repetição diária
   const [dailyTime, setDailyTime] = useState<Date>(new Date(Date.now() + 60 * 1000));
-  // Para segundos
   const [seconds, setSeconds] = useState('60');
 
   useEffect(() => {
@@ -43,7 +39,6 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({ visible, o
     } else {
       console.log('As notificações não funcionam em simuladores de iOS. Use um dispositivo físico.');
     }
-
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
         name: 'default',
@@ -54,6 +49,12 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({ visible, o
   }
 
   async function handleScheduleNotification() {
+    // Se estivermos na web, não tente agendar notificações
+    if (Platform.OS === 'web') {
+      Alert.alert('Notificações', 'Notificações não são suportadas na web.');
+      onClose();
+      return;
+    }
     try {
       switch (scheduleType) {
         case 'exact':
@@ -69,16 +70,17 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({ visible, o
       Alert.alert('Agendado', 'Notificação agendada com sucesso!');
       onClose();
     } catch (error) {
-      console.error(error);
+      console.error('Erro no agendamento:', error);
       Alert.alert('Erro', 'Falha ao agendar a notificação.');
     }
   }
 
-  // 1) Notificação de data exata (uma única vez)
+  // Agendamento para data exata
   async function scheduleExactNotification(date: Date) {
     if (date <= new Date()) {
       throw new Error('A data/hora escolhida já passou.');
     }
+    console.log('Agendando notificação para:', date.toString());
     await Notifications.scheduleNotificationAsync({
       content: {
         title: 'Notificação de Data Exata',
@@ -92,10 +94,11 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({ visible, o
     });
   }
 
-  // 2) Notificação diária (repetição no mesmo horário)
+  // Agendamento diário
   async function scheduleDailyNotification(time: Date) {
     const hour = time.getHours();
     const minute = time.getMinutes();
+    console.log(`Agendando notificação diária para: ${hour}:${minute}`);
     await Notifications.scheduleNotificationAsync({
       content: {
         title: 'Notificação Diária',
@@ -111,11 +114,12 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({ visible, o
     });
   }
 
-  // 3) Notificação após X segundos
+  // Agendamento para X segundos
   async function scheduleSecondsNotification(sec: number) {
     if (isNaN(sec) || sec < 1) {
       throw new Error('Número de segundos inválido');
     }
+    console.log(`Agendando notificação para ${sec} segundo(s) no futuro`);
     await Notifications.scheduleNotificationAsync({
       content: {
         title: 'Notificação em segundos',
@@ -159,7 +163,6 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({ visible, o
               color={scheduleType === 'seconds' ? '#007AFF' : '#666'}
             />
           </View>
-
           {scheduleType === 'exact' && (
             <>
               <Text style={modalStyles.label}>Data/Hora exata:</Text>
@@ -173,7 +176,6 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({ visible, o
               />
             </>
           )}
-
           {scheduleType === 'daily' && (
             <>
               <Text style={modalStyles.label}>Hora/Minuto (todo dia):</Text>
@@ -187,7 +189,6 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({ visible, o
               />
             </>
           )}
-
           {scheduleType === 'seconds' && (
             <>
               <Text style={modalStyles.label}>Segundos no futuro:</Text>
@@ -199,7 +200,6 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({ visible, o
               />
             </>
           )}
-
           <View style={modalStyles.buttonRow}>
             <Button title="Agendar" onPress={handleScheduleNotification} />
             <Button title="Cancelar" onPress={onClose} color="#888" />
@@ -252,5 +252,5 @@ const modalStyles = StyleSheet.create({
     marginTop: 20,
   },
 });
-// ... seu componente NotificationModal
+
 export default NotificationModal;

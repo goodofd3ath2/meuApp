@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useAuth } from '../src/authContext'; // ajuste o caminho conforme sua estrutura
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { login } = useAuth();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -21,6 +24,8 @@ export default function HomeScreen() {
   
       if (response.ok) {
         Alert.alert('Sucesso', 'Login realizado com sucesso!');
+        login(); // Atualiza o estado de autenticação e persiste
+
         router.push('/tabs/cadeiras'); // ou para a tela correta após login
       } else {
         Alert.alert('Erro', data.message || 'Falha ao fazer login');

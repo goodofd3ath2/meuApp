@@ -1,4 +1,4 @@
-// authContext.tsx
+// src/AuthContext.tsx
 import React, { createContext, useState, useContext, ReactNode } from 'react';
 
 type AuthContextType = {
@@ -14,6 +14,7 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  // Sem persistência: o estado sempre começa como false
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   const login = () => setIsAuthenticated(true);
