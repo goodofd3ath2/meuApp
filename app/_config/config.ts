@@ -1,5 +1,5 @@
 // config.ts
-export const API_BASE = "http://192.168.95.190:5000";
+export const API_BASE = "http://192.168.95.190:5000"; // Ajuste se mudar IP/porta
 export const API_CADEIRAS = `${API_BASE}/api/cadeiras`;
 export const API_DESCRICOES = `${API_BASE}/api/descricoes`;
 export const API_CURSOS = `${API_BASE}/api/cursos`;

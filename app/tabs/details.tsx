@@ -1,16 +1,18 @@
-// app/tabs/details.tsx
+// details.tsx
 import React from 'react';
 import { SafeAreaView, StyleSheet, View, Text, Button } from 'react-native';
-import { useAuth } from '../../src/authContext'; // ajuste o caminho
 import { useRouter } from 'expo-router';
 
+// Se estiver usando algum contexto de Auth
+// import { useAuth } from '../../src/authContext';
+
 export default function DetailsScreen() {
-  const { logout } = useAuth();
+  // const { logout } = useAuth();
   const router = useRouter();
 
   function handleLogout() {
-    logout();
-    router.replace('/'); // Redireciona para a tela de login após logout
+    // logout();
+    router.replace('/');
   }
 
   return (
@@ -26,7 +28,12 @@ export default function DetailsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
-  content: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+  content: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
   title: { fontSize: 24, fontWeight: '600', marginBottom: 20, color: '#333' },
   info: { fontSize: 16, color: '#666' },
 });

@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   SafeAreaView,
   KeyboardAvoidingView,
-  ScrollView,
   Platform,
   View,
   Text,
@@ -10,10 +9,11 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  FlatList,
+  Switch,
+  ScrollView,
 } from 'react-native';
 import { Calendar, DateData } from 'react-native-calendars';
-import { requestNotificationPermissions, scheduleNotification } from '../_config/notifications';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { CadeiraPicker, ICadeira } from '../components/CadeiraPicker';
 import { API_CADEIRAS, API_DESCRICOES } from '../_config/config';
 
@@ -24,6 +24,8 @@ interface IAnotacao {
   dataHora: string;
   tipo: string;
   user_id: number;
+  isRecurring?: boolean;     
+  notificationTime?: string; 
 }
 
 const usuarioLogado = { id: 2, curso_id: 1 };
@@ -36,12 +38,11 @@ export default function AnotacoesScreen() {
   const [historico, setHistorico] = useState<IAnotacao[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
 
-  useEffect(() => {
-    requestNotificationPermissions().catch(() => {
-      Alert.alert('Notificações', 'As notificações foram bloqueadas ou não permitidas.');
-    });
-  }, []);
+  // Tempo e recorrência
+  const [selectedTime, setSelectedTime] = useState<Date>(new Date());
+  const [isRecurring, setIsRecurring] = useState(false);
 
+  // Carrega as cadeiras ao montar
   useEffect(() => {
     fetch(`${API_CADEIRAS}?curso_id=${usuarioLogado.curso_id}`)
       .then((res) => res.json())
@@ -52,6 +53,7 @@ export default function AnotacoesScreen() {
       });
   }, []);
 
+  // Buscar histórico do dia selecionado
   async function fetchHistorico(date: string) {
     if (!date) return;
     try {
@@ -74,6 +76,14 @@ export default function AnotacoesScreen() {
     setModalVisible(false);
   }
 
+  // Quando muda o horário
+  function onChangeTime(event: any, date?: Date) {
+    if (date) {
+      setSelectedTime(date);
+    }
+  }
+
+  // Salvar no servidor
   async function salvarAnotacao() {
     if (!selectedDate) {
       Alert.alert('Atenção', 'Selecione uma data no calendário!');
@@ -88,10 +98,11 @@ export default function AnotacoesScreen() {
       return;
     }
 
-    // Combina a data selecionada com a hora atual
-    const now = new Date();
+    // Monta a data/hora
     const [year, month, day] = selectedDate.split('-').map(Number);
-    const combinedDate = new Date(year, month - 1, day, now.getHours(), now.getMinutes(), now.getSeconds());
+    const hours = selectedTime.getHours();
+    const minutes = selectedTime.getMinutes();
+    const combinedDate = new Date(year, (month || 1) - 1, day || 1, hours, minutes, 0);
 
     const novaAnotacao: IAnotacao = {
       cadeira: selectedCadeira.nome,
@@ -99,6 +110,8 @@ export default function AnotacoesScreen() {
       dataHora: combinedDate.toISOString(),
       tipo: 'anotacao',
       user_id: usuarioLogado.id,
+      isRecurring,
+      notificationTime: `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`,
     };
 
     try {
@@ -107,11 +120,18 @@ export default function AnotacoesScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(novaAnotacao),
       });
-      if (!response.ok) throw new Error('Erro ao salvar a anotação');
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.log('Erro ao salvar anotação:', data);
+        throw new Error(data.error || 'Erro ao salvar a anotação');
+      }
+
       Alert.alert('Sucesso', 'Anotação salva com sucesso!');
       setDescricao('');
-      setHistorico((prev) => [...prev, novaAnotacao]);
-      await scheduleNotification(selectedDate, `Lembrete: ${descricao}`);
+      setHistorico((prev) => [...prev, data]);
+
     } catch (error) {
       console.error('Erro ao salvar anotação:', error);
       Alert.alert('Erro', 'Não foi possível salvar a anotação.');
@@ -120,14 +140,24 @@ export default function AnotacoesScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#f7f7f7' }}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={styles.headerContainer}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ padding: 20, paddingTop: 40 }}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Calendário */}
           <Calendar
             onDayPress={handleDayPress}
             markedDates={{
               [selectedDate]: { selected: true, selectedColor: '#007AFF' },
             }}
           />
+
+          {/* Texto da anotação */}
           <TextInput
             style={styles.input}
             placeholder="Digite sua anotação..."
@@ -135,42 +165,84 @@ export default function AnotacoesScreen() {
             multiline
             onChangeText={(text) => setDescricao(text.replace(/\n/g, ' '))}
           />
+
+          {/* Título para o date-time picker */}
+          <Text style={{ marginBottom: 10 }}>Selecione o horário:</Text>
+
+          {/* iOS vs Android */}
+          {Platform.OS === 'ios' ? (
+            <DateTimePicker
+              value={selectedTime}
+              mode="time"
+              onChange={onChangeTime}
+              display="inline"      // iOS 14+
+            />
+          ) : (
+            <DateTimePicker
+              value={selectedTime}
+              mode="time"
+              onChange={onChangeTime}
+              display="spinner"     // Android
+              is24Hour={true}
+            />
+          )}
+
+          {/* Switch para recorrência */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 10 }}>
+            <Text style={{ marginRight: 8 }}>É recorrente?</Text>
+            <Switch value={isRecurring} onValueChange={setIsRecurring} />
+          </View>
+
+          {/* Escolha de cadeira */}
           <Text style={styles.label}>Selecione a cadeira:</Text>
-          <TouchableOpacity style={styles.picker} onPress={() => setModalVisible(true)}>
+          <TouchableOpacity
+            style={styles.picker}
+            onPress={() => setModalVisible(true)}
+          >
             <Text style={styles.selectedOptionText}>
               {selectedCadeira ? selectedCadeira.nome : 'Clique para escolher'}
             </Text>
           </TouchableOpacity>
+
           <CadeiraPicker
             visible={modalVisible}
             cadeiras={cadeiras}
             onSelect={handleSelectCadeira}
             onClose={() => setModalVisible(false)}
           />
+
+          {/* Botão de salvar */}
           <TouchableOpacity style={styles.button} onPress={salvarAnotacao}>
             <Text style={styles.buttonText}>Salvar</Text>
           </TouchableOpacity>
+
           <Text style={styles.label}>Anotações do dia {selectedDate || '...'}</Text>
-        </View>
-        <FlatList
-          data={historico}
-          keyExtractor={(item, index) => (item.id ? item.id.toString() : index.toString())}
-          renderItem={({ item }) => (
-            <View style={styles.item}>
-              <Text style={styles.itemCadeira}>{item.cadeira}</Text>
-              <Text style={styles.itemDesc}>{item.descricao}</Text>
-              <Text style={styles.itemDate}>{new Date(item.dataHora).toLocaleString()}</Text>
-            </View>
-          )}
-          contentContainerStyle={{ paddingBottom: 50 }}
-        />
+
+          {/* Ajuste para a dataHora retornada pelo back-end */}
+          {historico.map((item, index) => {
+            // Se vier em formato "2025-03-10 14:00:00", substitui espaço por 'T'
+            let dataValida = item.dataHora || ''; 
+            if (dataValida.includes(' ')) {
+              dataValida = dataValida.replace(' ', 'T'); 
+              // Se precisar de UTC, acrescente 'Z': dataValida += 'Z'
+            }
+            const dataLocalString = new Date(dataValida).toLocaleString();
+
+            return (
+              <View key={index} style={styles.item}>
+                <Text style={styles.itemCadeira}>{item.cadeira}</Text>
+                <Text style={styles.itemDesc}>{item.descricao}</Text>
+                <Text style={styles.itemDate}>{dataLocalString}</Text>
+              </View>
+            );
+          })}
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  headerContainer: { padding: 20, paddingTop: 40 },
   input: {
     minHeight: 100,
     width: '100%',
