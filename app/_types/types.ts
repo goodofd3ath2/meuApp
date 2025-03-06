@@ -28,3 +28,4 @@ export interface IUser {
     user_id: number;
   }
   
+  export default{};

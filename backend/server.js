@@ -103,61 +103,57 @@ app.get('/api/cadeiras', async (req, res) => {
   }
 });
 
+// Nova rota para consultar usuário por ID
+app.get('/api/usuarios', async (req, res) => {
+  const { user_id } = req.query;
+  if (!user_id) return res.status(400).json({ error: 'user_id é obrigatório' });
+
+  try {
+    const result = await pool.query('SELECT * FROM usuarios WHERE id = $1', [user_id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+    res.json([result.rows[0]]); // <-- Retorna array com 1 elemento, se quiser
+  } catch (error) {
+    console.error('Erro ao buscar usuário:', error);
+    res.status(500).json({ error: 'Erro ao buscar usuário' });
+  }
+});
+
 /* ====================== ROTAS DE DESCRICOES ===================== */
 
-// GET descricoes (filtra por data, cadeira, tipo e user_id)
+// GET descricoes (filtra por user_id e opcionalmente data)
 app.get('/api/descricoes', async (req, res) => {
-  const { data, cadeira, tipo, user_id } = req.query;
+  const { user_id, data } = req.query;
+
+  if (!user_id) {
+    return res.status(400).json({ error: 'user_id é obrigatório' });
+  }
 
   let query = `
-    SELECT
-      id,
-      cadeira,
-      descricao,
-      TO_CHAR(data_hora, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS data_hora,
-      tipo,
-      user_id,
-      is_recurring,
-      notification_time
-    FROM descricoes
+    SELECT d.id, d.cadeira, d.descricao, d.data_hora, d.tipo, d.user_id
+    FROM descricoes d
+    JOIN usuarios u ON d.user_id = u.id
+    JOIN cadeiras c ON d.cadeira = c.nome
+    WHERE u.id = $1
+      AND c.curso_id = u.curso_id
   `;
-  const conditions = [];
-  const values = [];
-  let index = 1;
+  const values = [user_id];
 
+  // Se quiser filtrar pelo dia exato (YYYY-MM-DD):
   if (data) {
-    conditions.push(`data_hora::date = $${index}`);
+    query += ' AND d.data_hora::date = $2';
     values.push(data);
-    index++;
-  }
-  if (cadeira) {
-    conditions.push(`cadeira ILIKE $${index}`);
-    values.push(cadeira.trim());
-    index++;
-  }
-  if (tipo) {
-    conditions.push(`tipo = $${index}`);
-    values.push(tipo.trim());
-    index++;
-  }
-  if (user_id) {
-    conditions.push(`user_id = $${index}`);
-    values.push(user_id);
-    index++;
   }
 
-  if (conditions.length > 0) {
-    query += ' WHERE ' + conditions.join(' AND ');
-  }
-
-  query += ' ORDER BY data_hora ASC';
+  query += ' ORDER BY d.data_hora ASC';
 
   try {
     const result = await pool.query(query, values);
     res.json(result.rows);
   } catch (error) {
-    console.error('Erro ao buscar descrições:', error.message);
-    res.status(500).json({ error: 'Erro ao buscar descrições' });
+    console.error('Erro ao buscar anotações:', error);
+    res.status(500).json({ error: 'Erro ao buscar anotações' });
   }
 });
 
@@ -174,7 +170,15 @@ app.post('/api/descricoes', async (req, res) => {
         (cadeira, descricao, data_hora, tipo, user_id, is_recurring, notification_time)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [cadeira, descricao, dataHora, finalTipo, user_id, isRecurring || false, notificationTime || null]
+      [
+        cadeira,
+        descricao,
+        dataHora,
+        finalTipo,
+        user_id,
+        isRecurring || false,
+        notificationTime || null
+      ]
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {

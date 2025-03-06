@@ -16,51 +16,110 @@ import { Calendar, DateData } from 'react-native-calendars';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { CadeiraPicker, ICadeira } from '../components/CadeiraPicker';
 import { API_CADEIRAS, API_DESCRICOES } from '../_config/config';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
 
 interface IAnotacao {
   id?: number;
   cadeira: string;
   descricao: string;
   dataHora: string;
+  data_hora?: string; // Permite que o backend retorne com esse nome
   tipo: string;
   user_id: number;
   isRecurring?: boolean;     
   notificationTime?: string; 
 }
 
-const usuarioLogado = { id: 2, curso_id: 1 };
-
 export default function AnotacoesScreen() {
+  const router = useRouter();
+
   const [cadeiras, setCadeiras] = useState<ICadeira[]>([]);
   const [selectedCadeira, setSelectedCadeira] = useState<ICadeira | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [descricao, setDescricao] = useState('');
   const [historico, setHistorico] = useState<IAnotacao[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
+  const [userId, setUserId] = useState<number | null>(null);
+  const [cursoId, setCursoId] = useState<number | null>(null);
 
   // Tempo e recorrência
   const [selectedTime, setSelectedTime] = useState<Date>(new Date());
   const [isRecurring, setIsRecurring] = useState(false);
 
-  // Carrega as cadeiras ao montar
+  // Verifica se há user_id salvo, caso não exista, redireciona para login
   useEffect(() => {
-    fetch(`${API_CADEIRAS}?curso_id=${usuarioLogado.curso_id}`)
+    const checkLoggedIn = async () => {
+      try {
+        const storedUserId = await AsyncStorage.getItem('user_id');
+        if (!storedUserId) {
+          console.error('Sem usuário logado ainda');
+          router.push('/'); // Redireciona ao login (rota "/")
+          return;
+        }
+        setUserId(parseInt(storedUserId, 10));
+      } catch (error) {
+        console.error('Erro ao checar login:', error);
+      }
+    };
+    checkLoggedIn();
+  }, [router]);
+
+  // Carrega o cursoId do usuário
+  useEffect(() => {
+    if (!userId) return;
+
+    const fetchCursoId = async () => {
+      try {
+        console.log('🔍 Buscando cursoId do usuário:', userId);
+        const response = await fetch(`http://192.168.95.190:5000/api/usuarios?user_id=${userId}`);
+        const data = await response.json();
+
+        // Ex: se data = [ { id: 1, email: '...', curso_id: 2, ... } ]
+        if (response.ok && Array.isArray(data) && data.length > 0) {
+          setCursoId(data[0].curso_id);
+        } else {
+          console.error('🚨 Erro ao buscar curso_id:', data.error || data);
+        }
+      } catch (error) {
+        console.error('🚨 Erro ao buscar curso_id:', error);
+      }
+    };
+    fetchCursoId();
+  }, [userId]);
+
+  // Carrega as cadeiras do curso
+  useEffect(() => {
+    if (!cursoId) return;
+    fetch(`${API_CADEIRAS}?curso_id=${cursoId}`)
       .then((res) => res.json())
       .then((data: ICadeira[]) => setCadeiras(data))
       .catch((err) => {
         console.error('Erro ao buscar cadeiras:', err);
         Alert.alert('Erro', 'Erro ao buscar cadeiras');
       });
-  }, []);
+  }, [cursoId]);
 
-  // Buscar histórico do dia selecionado
+  // Carrega as anotações do dia selecionado
+  useEffect(() => {
+    if (!selectedDate || !userId) return;
+    fetchHistorico(selectedDate);
+  }, [selectedDate, userId]);
+
   async function fetchHistorico(date: string) {
-    if (!date) return;
+    if (!date || !userId) return;
     try {
-      const response = await fetch(`${API_DESCRICOES}?data=${date}&user_id=${usuarioLogado.id}`);
+      const response = await fetch(`${API_DESCRICOES}?data=${date}&user_id=${userId}`);
       if (!response.ok) throw new Error('Erro ao buscar anotações');
       const data: IAnotacao[] = await response.json();
-      setHistorico(data);
+
+      // Ajuste para manter "dataHora" sempre presente
+      const anotacoes = data.map((item) => ({
+        ...item,
+        dataHora: item.data_hora || item.dataHora,
+      }));
+
+      setHistorico(anotacoes);
     } catch (error) {
       console.error('Erro ao buscar anotações:', error);
     }
@@ -68,7 +127,7 @@ export default function AnotacoesScreen() {
 
   function handleDayPress(day: DateData) {
     setSelectedDate(day.dateString);
-    fetchHistorico(day.dateString);
+    // Não precisa chamar fetchHistorico aqui de novo porque já está no useEffect
   }
 
   function handleSelectCadeira(cadeira: ICadeira) {
@@ -83,33 +142,25 @@ export default function AnotacoesScreen() {
     }
   }
 
-  // Salvar no servidor
+  // Salvar anotação
   async function salvarAnotacao() {
-    if (!selectedDate) {
-      Alert.alert('Atenção', 'Selecione uma data no calendário!');
-      return;
-    }
-    if (!selectedCadeira) {
-      Alert.alert('Atenção', 'Selecione uma cadeira!');
-      return;
-    }
-    if (!descricao.trim()) {
-      Alert.alert('Atenção', 'Digite alguma anotação!');
+    if (!selectedDate || !selectedCadeira || !descricao.trim() || !userId) {
+      Alert.alert('Atenção', 'Preencha todos os campos!');
       return;
     }
 
-    // Monta a data/hora
+    // Monta data/hora no formato ISO
     const [year, month, day] = selectedDate.split('-').map(Number);
     const hours = selectedTime.getHours();
     const minutes = selectedTime.getMinutes();
-    const combinedDate = new Date(year, (month || 1) - 1, day || 1, hours, minutes, 0);
+    const combinedDateUTC = new Date(Date.UTC(year, month - 1, day, hours, minutes, 0));
 
     const novaAnotacao: IAnotacao = {
       cadeira: selectedCadeira.nome,
       descricao,
-      dataHora: combinedDate.toISOString(),
+      dataHora: combinedDateUTC.toISOString(),
       tipo: 'anotacao',
-      user_id: usuarioLogado.id,
+      user_id: userId,
       isRecurring,
       notificationTime: `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`,
     };
@@ -122,16 +173,14 @@ export default function AnotacoesScreen() {
       });
 
       const data = await response.json();
-
       if (!response.ok) {
-        console.log('Erro ao salvar anotação:', data);
         throw new Error(data.error || 'Erro ao salvar a anotação');
       }
 
       Alert.alert('Sucesso', 'Anotação salva com sucesso!');
       setDescricao('');
+      // Atualiza o histórico localmente
       setHistorico((prev) => [...prev, data]);
-
     } catch (error) {
       console.error('Erro ao salvar anotação:', error);
       Alert.alert('Erro', 'Não foi possível salvar a anotação.');
@@ -175,14 +224,14 @@ export default function AnotacoesScreen() {
               value={selectedTime}
               mode="time"
               onChange={onChangeTime}
-              display="inline"      // iOS 14+
+              display="inline"
             />
           ) : (
             <DateTimePicker
               value={selectedTime}
               mode="time"
               onChange={onChangeTime}
-              display="spinner"     // Android
+              display="spinner"
               is24Hour={true}
             />
           )}
@@ -218,23 +267,53 @@ export default function AnotacoesScreen() {
 
           <Text style={styles.label}>Anotações do dia {selectedDate || '...'}</Text>
 
-          {/* Ajuste para a dataHora retornada pelo back-end */}
           {historico.map((item, index) => {
-            // Se vier em formato "2025-03-10 14:00:00", substitui espaço por 'T'
-            let dataValida = item.dataHora || ''; 
-            if (dataValida.includes(' ')) {
-              dataValida = dataValida.replace(' ', 'T'); 
-              // Se precisar de UTC, acrescente 'Z': dataValida += 'Z'
-            }
-            const dataLocalString = new Date(dataValida).toLocaleString();
+            console.log('📢 Debug: Item recebido do backend:', JSON.stringify(item, null, 2));
 
-            return (
-              <View key={index} style={styles.item}>
-                <Text style={styles.itemCadeira}>{item.cadeira}</Text>
-                <Text style={styles.itemDesc}>{item.descricao}</Text>
-                <Text style={styles.itemDate}>{dataLocalString}</Text>
-              </View>
-            );
+            // dataValida pode estar em item.dataHora ou item.data_hora
+            const dataValida = item.dataHora || item.data_hora || undefined;
+            if (!dataValida) {
+              console.warn('⚠️ Data não disponível para:', item);
+              return (
+                <View key={index} style={styles.item}>
+                  <Text style={styles.itemCadeira}>{item.cadeira}</Text>
+                  <Text style={styles.itemDesc}>{item.descricao}</Text>
+                  <Text style={styles.itemDate}>Erro: Data não disponível</Text>
+                </View>
+              );
+            }
+
+            try {
+              // Date a partir da string
+              const dataObjeto = new Date(dataValida);
+              // Exibe no formato local
+              const dataFormatada = dataObjeto.toLocaleString('pt-BR', {
+                timeZone: 'America/Sao_Paulo',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+              });
+
+              return (
+                <View key={index} style={styles.item}>
+                  <Text style={styles.itemCadeira}>{item.cadeira}</Text>
+                  <Text style={styles.itemDesc}>{item.descricao}</Text>
+                  <Text style={styles.itemDate}>{dataFormatada}</Text>
+                </View>
+              );
+            } catch (error) {
+              console.error('🚨 Erro ao processar data:', error);
+              return (
+                <View key={index} style={styles.item}>
+                  <Text style={styles.itemCadeira}>{item.cadeira}</Text>
+                  <Text style={styles.itemDesc}>{item.descricao}</Text>
+                  <Text style={styles.itemDate}>Erro: Data inválida</Text>
+                </View>
+              );
+            }
           })}
         </ScrollView>
       </KeyboardAvoidingView>
@@ -254,7 +333,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ccc',
   },
-  label: { fontSize: 16, fontWeight: '500', marginBottom: 8 },
+  label: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
   picker: {
     backgroundColor: '#fff',
     padding: 15,
@@ -263,7 +346,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ddd',
   },
-  selectedOptionText: { fontSize: 16, color: '#333' },
+  selectedOptionText: {
+    fontSize: 16,
+    color: '#333',
+  },
   button: {
     backgroundColor: '#007AFF',
     padding: 15,
@@ -271,9 +357,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
-  buttonText: { color: '#fff', fontWeight: '600', fontSize: 18 },
-  item: { backgroundColor: '#fff', padding: 15, borderRadius: 10, marginVertical: 5 },
-  itemCadeira: { fontSize: 14, fontWeight: '600', marginBottom: 4 },
-  itemDesc: { fontSize: 14, color: '#333' },
-  itemDate: { color: '#999', fontSize: 14, marginTop: 5 },
+  buttonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 18,
+  },
+  item: {
+    backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 10,
+    marginVertical: 5,
+  },
+  itemCadeira: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  itemDesc: {
+    fontSize: 14,
+    color: '#333',
+  },
+  itemDate: {
+    color: '#999',
+    fontSize: 14,
+    marginTop: 5,
+  },
 });

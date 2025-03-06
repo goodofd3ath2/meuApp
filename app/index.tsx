@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../src/authContext'; // ajuste o caminho conforme sua estrutura
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -14,19 +15,25 @@ export default function HomeScreen() {
     try {
       const response = await fetch('http://192.168.95.190:5000/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
       const data = await response.json();
       console.log('Resposta do servidor:', data);
-  
+
       if (response.ok) {
         Alert.alert('Sucesso', 'Login realizado com sucesso!');
-        login(); // Atualiza o estado de autenticação e persiste
+        
+        // Salva o user_id no AsyncStorage logo após login bem-sucedido
+        // (Supondo que 'data.user' seja o objeto retornado com o ID do usuário)
+        if (data.user && data.user.id) {
+          await AsyncStorage.setItem('user_id', data.user.id.toString());
+        }
 
-        router.push('/tabs/cadeiras'); // ou para a tela correta após login
+        // Caso esteja usando um contexto de autenticação
+        login(); 
+        // Redireciona para a tela de anotações, cadeiras ou outra
+        router.push('/tabs/cadeiras');
       } else {
         Alert.alert('Erro', data.message || 'Falha ao fazer login');
       }
@@ -35,7 +42,6 @@ export default function HomeScreen() {
       Alert.alert('Erro', 'Não foi possível conectar ao servidor');
     }
   };
-  
 
   return (
     <View style={styles.container}>

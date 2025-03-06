@@ -87,11 +87,10 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({ visible, o
         body: `Dispara em ${date.toLocaleString()}`,
         sound: 'default',
       },
-      trigger: {
-        date,
-        channelId: Platform.OS === 'android' ? 'default' : undefined,
-      },
+      trigger: date, // ✅ Correção: Passar `date` diretamente sem `type`
     });
+    
+   
   }
 
   // Agendamento diário
